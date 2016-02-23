@@ -139,6 +139,15 @@ object Main {
     (candidateMedication, candidateLab, candidateDiagnostic)
   }
 
+  def convertResult(labValue: String): Double = {
+    if (labValue != null && labValue.nonEmpty) {
+      val labValueResult = labValue replaceAll("[,]", "")
+      labValueResult.toDouble
+    } else {
+      0.0
+    }
+  }
+
   def loadRddRawData(sqlContext: SQLContext): (RDD[Medication], RDD[LabResult], RDD[Diagnostic]) = {
     /** You may need to use this date format. */
     val dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssX")
@@ -150,9 +159,22 @@ object Main {
       * */
 
     /** TODO: implement your own code here and remove existing placeholder code below */
-    val medication: RDD[Medication] =  sqlContext.sparkContext.emptyRDD
-    val labResult: RDD[LabResult] =  sqlContext.sparkContext.emptyRDD
-    val diagnostic: RDD[Diagnostic] =  sqlContext.sparkContext.emptyRDD
+    val medRows = CSVUtils.loadCSVAsTable(sqlContext, "/Users/nickrobinson/Development/CS8803/homework3/code/data/medication_orders_INPUT.csv", "medicine")
+    val medRddRows = sqlContext.sql("SELECT Member_ID,Order_Date,Drug_Name FROM medicine")
+    val medication: RDD[Medication] = medRddRows.map(p => Medication(p(0).toString, dateFormat.parse(p(1).toString), p(2).toString))
+
+    val labRows = CSVUtils.loadCSVAsTable(sqlContext, "/Users/nickrobinson/Development/CS8803/homework3/code/data/lab_results_INPUT.csv", "labs")
+    val labRddRows = sqlContext.sql("SELECT Member_ID, Date_Collected, Test_Name, Numeric_Result FROM labs")
+    val labResult: RDD[LabResult] = labRddRows.map(p => LabResult(p(0).toString, dateFormat.parse(p(1).toString), p(2).toString, convertResult(p(3).toString)))
+
+    val diagRows = CSVUtils.loadCSVAsTable(sqlContext, "/Users/nickrobinson/Development/CS8803/homework3/code/data/encounter_INPUT.csv", "diag")
+    val diagRddRows = sqlContext.sql("SELECT Member_ID, Encounter_ID, Encounter_DateTime FROM diag")
+    val icdRows = CSVUtils.loadCSVAsTable(sqlContext, "/Users/nickrobinson/Development/CS8803/homework3/code/data/encounter_dx_INPUT.csv", "icd")
+    val icdRddRows = sqlContext.sql("SELECT Encounter_ID, code FROM icd")
+
+    val diagnosticRows = sqlContext.sql("SELECT d.Member_ID, d.Encounter_DateTime, i.code FROM diag d JOIN icd i ON d.Encounter_ID = i.Encounter_ID")
+
+    val diagnostic: RDD[Diagnostic] = diagnosticRows.map(p => Diagnostic(p(0).toString, dateFormat.parse(p(1).toString), p(2).toString))
 
     (medication, labResult, diagnostic)
   }
